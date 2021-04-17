@@ -17,23 +17,22 @@
 # sys.path.insert(0, os.path.abspath('.'))
 
 from typing import Any
+from io import BytesIO
+import os
 import pkg_resources
+import subprocess
+import time
+from zipfile import ZipFile
 
 import plotly.io as pio
+import requests
 from sphinx_gallery.sorting import FileNameSortKey
+
 
 __version__ = pkg_resources.get_distribution("optuna").version
 
-import os
 github_token = os.getenv("GITHUB_TOKEN")
-
 if github_token is not None:
-    from io import BytesIO
-    from zipfile import ZipFile
-    import subprocess
-    import shutil
-    import requests
-    import time
 
     def get_commit_id() -> str:
         output = subprocess.check_output(["git", "rev-parse", "HEAD"])
@@ -50,16 +49,14 @@ if github_token is not None:
 
     def download_artifact() -> None:
         artifacts = requests.get(
-            f"https://api.github.com/repos/{repo}/actions/artifacts",
+            "https://api.github.com/repos/himkt/optuna-test-rtds/actions/artifacts",
             params=dict(per_page=20),
         ).json()["artifacts"]
 
-        print(f"artifacts: {artifacts}")
         target_artifact_url = search_artifact(artifacts, commit_id)
-
         artifact = requests.get(
             target_artifact_url,
-            headers=dict(Authorization=f"token {github_token}")
+            headers={"Authorization": f"token {github_token}"},
         )
         print(f"{target_artifact_url}: artifact")
 
@@ -72,9 +69,18 @@ if github_token is not None:
             f.extractall(path=path)
             print(f"Extracted to {path}")
 
+    num_retries = 3
+    sleep_interval = 30
+
     commit_id = get_commit_id()
-    repo = "himkt/optuna-test-rtds"
-    download_artifact()
+    for _ in range(num_retries):
+        try:
+            download_artifact()
+            break
+        except Exception as e:
+            print("Error: ", e)
+            print(f"Retry after {sleep_interval} sec...")
+            time.sleep(sleep_interval)
 
 # -- Project information -----------------------------------------------------
 
