@@ -16,12 +16,65 @@
 # import sys
 # sys.path.insert(0, os.path.abspath('.'))
 
+from typing import Any
 import pkg_resources
 
 import plotly.io as pio
 from sphinx_gallery.sorting import FileNameSortKey
 
 __version__ = pkg_resources.get_distribution("optuna").version
+
+import os
+github_token = os.getenv("GITHUB_TOKEN")
+
+if github_token is not None:
+    from io import BytesIO
+    from zipfile import ZipFile
+    import subprocess
+    import shutil
+    import requests
+    import time
+
+    def get_commit_id() -> str:
+        output = subprocess.check_output(["git", "rev-parse", "HEAD"])
+        return output.strip().decode("ascii")
+
+    def search_artifact(artifacts: Any, hash: str) -> str:
+        target_name = f"artifacts-{hash}"
+        artifact_names = [a["name"] for a in artifacts]
+
+        for artifact in artifacts:
+            if artifact["name"] == target_name:
+                return artifact["archive_download_url"]
+        raise RuntimeError(f"Not found {target_name} on {artifact_names}")
+
+    def download_artifact() -> None:
+        artifacts = requests.get(
+            f"https://api.github.com/repos/{repo}/actions/artifacts",
+            params=dict(per_page=20),
+        ).json()["artifacts"]
+
+        print(f"artifacts: {artifacts}")
+        target_artifact_url = search_artifact(artifacts, commit_id)
+
+        artifact = requests.get(
+            target_artifact_url,
+            headers=dict(Authorization=f"token {github_token}")
+        )
+        print(f"{target_artifact_url}: artifact")
+
+        if artifact.status_code != 200:
+            raise RuntimeError(f"Invalid status code {artifact.status_code}")
+
+        print("Succeeded to fetch request")
+        with ZipFile(BytesIO(artifact.content)) as f:
+            path = "tutorial"
+            f.extractall(path=path)
+            print(f"Extracted to {path}")
+
+    commit_id = get_commit_id()
+    repo = "himkt/optuna-test-rtds"
+    download_artifact()
 
 # -- Project information -----------------------------------------------------
 
