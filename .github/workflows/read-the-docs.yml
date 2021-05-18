@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - master
+      - test-release
     tags:
       - "v*"
 
