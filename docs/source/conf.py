@@ -32,6 +32,7 @@ from sphinx_gallery.sorting import FileNameSortKey
 
 __version__ = pkg_resources.get_distribution("optuna").version
 
+print("os.env: ", os.environ)
 github_token = os.getenv("GITHUB_TOKEN")
 if github_token is not None:
 
