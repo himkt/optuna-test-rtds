@@ -1160,7 +1160,7 @@ def create_study(
 
 
 def load_study(
-    study_name: str,
+    study_name: Optional[str],
     storage: Union[str, storages.BaseStorage],
     sampler: Optional["samplers.BaseSampler"] = None,
     pruner: Optional[pruners.BasePruner] = None,
@@ -1198,7 +1198,8 @@ def load_study(
 
     Args:
         study_name:
-            Study's name. Each study has a unique name as an identifier.
+            Study's name. Each study has a unique name as an identifier. If :obj:`None`, checks
+            whether the storage contains a single study, and if so loads that study.
         storage:
             Database URL such as ``sqlite:///example.db``. Please see also the documentation of
             :func:`~optuna.study.create_study` for further details.
@@ -1211,10 +1212,26 @@ def load_study(
             If :obj:`None` is specified, :class:`~optuna.pruners.MedianPruner` is used
             as the default. See also :class:`~optuna.pruners`.
 
+    Raises:
+        :exc:`ValueError`:
+            If ``study_name`` is :obj:`None` and the storage contains more than 1 study.
+
     See also:
         :func:`optuna.load_study` is an alias of :func:`optuna.study.load_study`.
 
     """
+    if study_name is None:
+        study_summaries = get_all_study_summaries(storage)
+        if len(study_summaries) != 1:
+            raise ValueError(
+                f"Could not determine the study name since the storage {storage} does not "
+                "contain exactly 1 study. Specify `study_name`."
+            )
+        study_name = study_summaries[0].study_name
+        _logger.info(
+            f"Study name was omitted but trying to load '{study_name}' because that was the only "
+            "study found in the storage."
+        )
 
     return Study(study_name=study_name, storage=storage, sampler=sampler, pruner=pruner)
 
@@ -1268,6 +1285,96 @@ def delete_study(
     storage = storages.get_storage(storage)
     study_id = storage.get_study_id_from_name(study_name)
     storage.delete_study(study_id)
+
+
+@experimental("2.8.0")
+def copy_study(
+    from_study_name: str,
+    from_storage: Union[str, storages.BaseStorage],
+    to_storage: Union[str, storages.BaseStorage],
+    to_study_name: Optional[str] = None,
+) -> None:
+    """Copy study from one storage to another.
+
+    The direction(s) of the objective(s) in the study, trials, user attributes and system
+    attributes are copied.
+
+    Example:
+
+        .. testsetup::
+
+            import os
+
+            if os.path.exists("example.db"):
+                raise RuntimeError("'example.db' already exists. Please remove it.")
+            if os.path.exists("example_copy.db"):
+                raise RuntimeError("'example_copy.db' already exists. Please remove it.")
+
+        .. testcode::
+
+            import optuna
+
+
+            def objective(trial):
+                x = trial.suggest_float("x", -10, 10)
+                return (x - 2) ** 2
+
+
+            study = optuna.create_study(
+                study_name="example-study",
+                storage="sqlite:///example.db",
+            )
+            study.optimize(objective, n_trials=3)
+
+            optuna.copy_study(
+                from_study_name="example-study",
+                from_storage="sqlite:///example.db",
+                to_storage="sqlite:///example_copy.db",
+            )
+
+            study = optuna.load_study(
+                study_name=None,
+                storage="sqlite:///example_copy.db",
+            )
+
+        .. testcleanup::
+
+            os.remove("example.db")
+            os.remove("example_copy.db")
+
+    Args:
+        from_study_name:
+            Name of study.
+        from_storage:
+            Source database URL such as ``sqlite:///example.db``. Please see also the
+            documentation of :func:`~optuna.study.create_study` for further details.
+        to_storage:
+            Destination database URL.
+        to_study_name:
+            Name of the created study. If omitted, ``from_study_name`` is used.
+
+    Raises:
+        :class:`~optuna.exceptions.DuplicatedStudyError`:
+            If a study with a conflicting name already exists in the destination storage.
+
+    """
+
+    from_study = load_study(study_name=from_study_name, storage=from_storage)
+    to_study = create_study(
+        study_name=to_study_name or from_study_name,
+        storage=to_storage,
+        directions=from_study.directions,
+        load_if_exists=False,
+    )
+
+    for key, value in from_study.system_attrs.items():
+        to_study.set_system_attr(key, value)
+
+    for key, value in from_study.user_attrs.items():
+        to_study.set_user_attr(key, value)
+
+    # Trials are deep copied on `add_trials`.
+    to_study.add_trials(from_study.get_trials(deepcopy=False))
 
 
 def get_all_study_summaries(storage: Union[str, storages.BaseStorage]) -> List[StudySummary]:
