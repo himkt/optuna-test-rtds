@@ -1,13 +1,14 @@
-name: Build/upload docs
+name: Build/upload docs and trigger ReadTheDocs building
 
 on:
   push:
     branches:
       - master
-  pull_request: {}
+    tags:
+      - "v*"
 
 jobs:
-  checks:
+  build:
     runs-on: ubuntu-latest
 
     steps:
