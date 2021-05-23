@@ -36,8 +36,9 @@ jobs:
         name: artifacts-${{ github.sha }}
         path: docs/source/tutorial
 
-    - uses: dfm/rtds-action@v1
-      with:
-        webhook_url: ${{ secrets.RTDS_WEBHOOK_URL }}
-        webhook_token: ${{ secrets.RTDS_WEBHOOK_TOKEN }}
-        commit_ref: ${{ github.ref }}
+    - name: curl
+      run: |
+        curl ${{ secrets.RTDS_WEBHOOK_URL }} \
+        -X POST \
+        -d 'token=${{ secrets.RTDS_WEBHOOK_URL }}' \
+        -d 'branches=$(git branch --show-current)'
