@@ -43,8 +43,8 @@ if github_token is not None:
 
     def retrieve_artifacts() -> List[Any]:
         return requests.get(
-            "https://api.github.com/repos/optuna/optuna/actions/artifacts",
-            params=dict(per_page=20),
+            "https://api.github.com/repos/himkt/optuna-test-rtds/actions/artifacts",
+            params=dict(per_page=100),
         ).json()["artifacts"]
 
     def search_artifact(artifacts: Any, hash: str) -> str:
